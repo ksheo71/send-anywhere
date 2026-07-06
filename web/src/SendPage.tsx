@@ -7,13 +7,9 @@ import { Dropzone } from '@/components/Dropzone'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
+import { fmtSize } from '@/lib/format'
 
 const CHUNK = 50 * 1024 * 1024
-
-function fmtSize(n: number) {
-  if (n >= 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`
-  return `${Math.max(1, Math.round(n / 1024))} KB`
-}
 
 export function SendPage() {
   const [files, setFiles] = useState<File[]>([])

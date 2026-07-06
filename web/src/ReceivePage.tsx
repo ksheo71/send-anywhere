@@ -3,11 +3,7 @@ import { Download, File as FileIcon } from 'lucide-react'
 import { resolve, downloadUrl, type FileMeta } from './api.js'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-
-function fmtSize(n: number) {
-  if (n >= 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`
-  return `${Math.max(1, Math.round(n / 1024))} KB`
-}
+import { fmtSize } from '@/lib/format'
 
 export function ReceivePage({ initialKey }: { initialKey: string }) {
   const [key, setKey] = useState(initialKey)
