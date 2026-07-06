@@ -19,6 +19,9 @@
   "dependencies": {
     "@fastify/rate-limit": "^10.0.0",
     "@fastify/static": "^8.0.0",
+    "@radix-ui/react-progress": "^1.1.11",
+    "@radix-ui/react-slot": "^1.3.0",
+    "@radix-ui/react-tabs": "^1.1.16",
     "@tus/file-store": "^2.1.0",
     "@tus/server": "^2.4.1",
     "archiver": "^7.0.1",
