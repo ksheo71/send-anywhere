@@ -1,56 +1,141 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as tus from 'tus-js-client'
 import QRCode from 'qrcode'
-import { Check, Copy, File as FileIcon, X } from 'lucide-react'
+import { Check, Copy } from 'lucide-react'
 import { createTransfer, finalizeTransfer } from './api.js'
+import { runPool } from '@/lib/uploadPool'
+import { FileRow, type UploadStatus } from '@/components/FileRow'
 import { Dropzone } from '@/components/Dropzone'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
-import { fmtSize } from '@/lib/format'
 
 const CHUNK = 50 * 1024 * 1024
+const CONCURRENCY = 3
+
+interface FileState { status: UploadStatus; progress: number }
 
 export function SendPage() {
   const [files, setFiles] = useState<File[]>([])
-  const [progress, setProgress] = useState(0)
+  const [states, setStates] = useState<FileState[]>([])
+  const [overall, setOverall] = useState(0)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ code: string; slug: string } | null>(null)
   const [error, setError] = useState('')
   const [qrDataUrl, setQrDataUrl] = useState('')
   const [copied, setCopied] = useState(false)
 
+  const uploadsRef = useRef<(tus.Upload | undefined)[]>([])
+  const canceledRef = useRef(false)
+  // createTransfer 응답(transferId/code/slug + 파일별 서버 id)을 재시도 때 재사용하기 위해 보관
+  const transferRef = useRef<{ transferId: string; code: string; slug: string; fileIds: string[] } | null>(null)
+
+  function setFileState(i: number, patch: Partial<FileState>) {
+    setStates((prev) => prev.map((s, j) => (j === i ? { ...s, ...patch } : s)))
+  }
+
+  // 단일 파일 업로드(성공 시 resolve, 실패 시 reject). tus 참조를 uploadsRef에 저장.
+  function uploadOne(file: File, i: number, fileId: string, uploadedBytes: number[], totals: number) {
+    return new Promise<void>((resolve, reject) => {
+      setFileState(i, { status: 'uploading' })
+      const upload = new tus.Upload(file, {
+        endpoint: '/files',
+        chunkSize: CHUNK,
+        retryDelays: [0, 1000, 3000, 5000],
+        metadata: { fileId, filename: file.name },
+        onError: (e) => {
+          if (canceledRef.current) { resolve(); return } // 취소로 인한 abort는 에러로 표시하지 않음
+          setFileState(i, { status: 'error' })
+          reject(e)
+        },
+        onProgress: (sent) => {
+          uploadedBytes[i] = sent
+          setFileState(i, { progress: Math.round((sent / (file.size || 1)) * 100) })
+          setOverall(Math.round((uploadedBytes.reduce((a, b) => a + b, 0) / (totals || 1)) * 100))
+        },
+        onSuccess: () => {
+          uploadedBytes[i] = file.size
+          setFileState(i, { status: 'done', progress: 100 })
+          setOverall(Math.round((uploadedBytes.reduce((a, b) => a + b, 0) / (totals || 1)) * 100))
+          resolve()
+        },
+      })
+      uploadsRef.current[i] = upload
+      upload.start()
+    })
+  }
+
   async function send() {
     if (files.length === 0) return
-    setBusy(true); setError(''); setProgress(0)
+    setBusy(true); setError(''); setOverall(0)
+    canceledRef.current = false
+    setStates(files.map(() => ({ status: 'queued', progress: 0 })))
+    uploadsRef.current = new Array(files.length)
     try {
-      const meta = files.map((f) => ({ filename: f.name, size: f.size }))
-      const t = await createTransfer(meta)
+      const t = await createTransfer(files.map((f) => ({ filename: f.name, size: f.size })))
+      transferRef.current = { transferId: t.transferId, code: t.code, slug: t.slug, fileIds: t.files.map((f) => f.id) }
       const totals = files.reduce((s, f) => s + f.size, 0)
-      let uploaded = 0
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i]
-        const fileId = t.files[i].id
-        await new Promise<void>((resolve, reject) => {
-          const upload = new tus.Upload(file, {
-            endpoint: '/files',
-            chunkSize: CHUNK,
-            retryDelays: [0, 1000, 3000, 5000],
-            metadata: { fileId, filename: file.name },
-            onError: reject,
-            onProgress: (sent) => setProgress(Math.round(((uploaded + sent) / totals) * 100)),
-            onSuccess: () => { uploaded += file.size; resolve() },
-          })
-          upload.start()
-        })
+      const uploadedBytes = new Array(files.length).fill(0)
+      const failed: boolean[] = new Array(files.length).fill(false)
+
+      await runPool(files, CONCURRENCY, async (file, i) => {
+        try {
+          await uploadOne(file, i, t.files[i].id, uploadedBytes, totals)
+        } catch {
+          failed[i] = true
+        }
+      })
+
+      if (canceledRef.current) return
+      if (failed.some(Boolean)) {
+        setError('일부 파일 업로드에 실패했습니다. 다시 시도하거나 취소하세요.')
+        setBusy(false)
+        return
       }
       await finalizeTransfer(t.transferId)
       setResult({ code: t.code, slug: t.slug })
     } catch (e: any) {
-      setError(e?.message ?? '업로드 실패')
-    } finally {
+      if (!canceledRef.current) setError(e?.message ?? '업로드 실패')
       setBusy(false)
     }
+  }
+
+  // 에러난 파일만 같은 transfer로 재개(tus가 오프셋부터 이어받음). 전부 성공하면 finalize.
+  async function retryFailed() {
+    const t = transferRef.current
+    if (!t) return
+    setError(''); setBusy(true)
+    canceledRef.current = false
+    try {
+      const totals = files.reduce((s, f) => s + f.size, 0)
+      const uploadedBytes = files.map((f, i) => (states[i]?.status === 'done' ? f.size : 0))
+      const targets = states.map((s, i) => (s.status === 'error' ? i : -1)).filter((i) => i >= 0)
+      const failed: boolean[] = new Array(files.length).fill(false)
+
+      await runPool(targets, CONCURRENCY, async (i) => {
+        try {
+          await uploadOne(files[i], i, t.fileIds[i], uploadedBytes, totals)
+        } catch {
+          failed[i] = true
+        }
+      })
+
+      if (canceledRef.current) return
+      if (failed.some(Boolean)) { setError('일부 파일이 여전히 실패했습니다.'); setBusy(false); return }
+      await finalizeTransfer(t.transferId)
+      setResult({ code: t.code, slug: t.slug }) // t = transferRef.current 이므로 code/slug 존재
+    } catch (e: any) {
+      if (!canceledRef.current) setError(e?.message ?? '업로드 실패')
+      setBusy(false)
+    }
+  }
+
+  function cancelAll() {
+    canceledRef.current = true
+    uploadsRef.current.forEach((u) => { try { u?.abort() } catch { /* noop */ } })
+    uploadsRef.current = []
+    setBusy(false); setOverall(0); setError('')
+    setStates(files.map(() => ({ status: 'queued', progress: 0 })))
   }
 
   const link = result ? `${window.location.origin}/${result.slug}` : ''
@@ -71,8 +156,12 @@ export function SendPage() {
   }
 
   function reset() {
-    setResult(null); setFiles([]); setProgress(0); setError('')
+    setResult(null); setFiles([]); setStates([]); setOverall(0); setError('')
+    transferRef.current = null
+    uploadsRef.current = []
   }
+
+  const hasError = states.some((s) => s.status === 'error')
 
   if (result) {
     return (
@@ -101,32 +190,37 @@ export function SendPage() {
       {files.length > 0 && (
         <ul className="flex flex-col gap-2">
           {files.map((f, i) => (
-            <li key={`${f.name}-${i}`} className="flex items-center gap-3 rounded-md border px-3 py-2 text-sm">
-              <FileIcon className="size-4 shrink-0 text-muted-foreground" />
-              <span className="flex-1 truncate">{f.name}</span>
-              <span className="text-muted-foreground">{fmtSize(f.size)}</span>
-              {!busy && (
-                <button aria-label="제거" onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}>
-                  <X className="size-4 text-muted-foreground hover:text-foreground" />
-                </button>
-              )}
-            </li>
+            <FileRow
+              key={`${f.name}-${i}`}
+              name={f.name}
+              size={f.size}
+              status={states[i]?.status ?? 'queued'}
+              progress={states[i]?.progress ?? 0}
+              onRemove={!busy && !result ? () => setFiles((prev) => prev.filter((_, j) => j !== i)) : undefined}
+            />
           ))}
         </ul>
       )}
 
       {busy && (
         <div className="flex flex-col gap-1">
-          <Progress value={progress} />
-          <span className="text-right text-xs text-muted-foreground">{progress}%</span>
+          <Progress value={overall} />
+          <span className="text-right text-xs text-muted-foreground">{overall}%</span>
         </div>
       )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <Button size="lg" onClick={send} disabled={busy || files.length === 0}>
-        {busy ? `업로드 중… ${progress}%` : '보내기'}
-      </Button>
+      {busy ? (
+        <Button size="lg" variant="outline" onClick={cancelAll}>전체 취소</Button>
+      ) : hasError ? (
+        <div className="flex gap-2">
+          <Button size="lg" className="flex-1" onClick={retryFailed}>다시 시도</Button>
+          <Button size="lg" variant="outline" onClick={cancelAll}>취소</Button>
+        </div>
+      ) : (
+        <Button size="lg" onClick={send} disabled={files.length === 0}>보내기</Button>
+      )}
     </div>
   )
 }
