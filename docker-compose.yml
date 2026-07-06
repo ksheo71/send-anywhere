@@ -3,12 +3,12 @@ name: send-anywhere
 services:
   send-anywhere:
     build:
-      context: ./repo
+      context: .
       dockerfile: Dockerfile
     container_name: send-anywhere
     restart: unless-stopped
     env_file:
-      - .env
+      - ../.env
     volumes:
       - /opt/stack/data/send-anywhere/uploads:/data/uploads
       - /opt/stack/data/send-anywhere/db:/data/db
