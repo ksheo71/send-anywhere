@@ -2,7 +2,7 @@ import { AlertCircle, CheckCircle2, File as FileIcon, Loader2, X } from 'lucide-
 import { Progress } from '@/components/ui/progress'
 import { fmtSize } from '@/lib/format'
 
-export type UploadStatus = 'queued' | 'uploading' | 'done' | 'error' | 'canceled'
+export type UploadStatus = 'queued' | 'uploading' | 'done' | 'error'
 
 function StatusIcon({ status }: { status: UploadStatus }) {
   if (status === 'uploading') return <Loader2 className="size-4 shrink-0 animate-spin text-primary" />

@@ -50,13 +50,13 @@ export function SendPage() {
         },
         onProgress: (sent) => {
           uploadedBytes[i] = sent
-          setFileState(i, { progress: Math.round((sent / file.size) * 100) })
-          setOverall(Math.round((uploadedBytes.reduce((a, b) => a + b, 0) / totals) * 100))
+          setFileState(i, { progress: Math.round((sent / (file.size || 1)) * 100) })
+          setOverall(Math.round((uploadedBytes.reduce((a, b) => a + b, 0) / (totals || 1)) * 100))
         },
         onSuccess: () => {
           uploadedBytes[i] = file.size
           setFileState(i, { status: 'done', progress: 100 })
-          setOverall(Math.round((uploadedBytes.reduce((a, b) => a + b, 0) / totals) * 100))
+          setOverall(Math.round((uploadedBytes.reduce((a, b) => a + b, 0) / (totals || 1)) * 100))
           resolve()
         },
       })
@@ -106,23 +106,28 @@ export function SendPage() {
     if (!t) return
     setError(''); setBusy(true)
     canceledRef.current = false
-    const totals = files.reduce((s, f) => s + f.size, 0)
-    const uploadedBytes = files.map((f, i) => (states[i]?.status === 'done' ? f.size : 0))
-    const targets = states.map((s, i) => (s.status === 'error' ? i : -1)).filter((i) => i >= 0)
-    const failed: boolean[] = new Array(files.length).fill(false)
+    try {
+      const totals = files.reduce((s, f) => s + f.size, 0)
+      const uploadedBytes = files.map((f, i) => (states[i]?.status === 'done' ? f.size : 0))
+      const targets = states.map((s, i) => (s.status === 'error' ? i : -1)).filter((i) => i >= 0)
+      const failed: boolean[] = new Array(files.length).fill(false)
 
-    await runPool(targets, CONCURRENCY, async (i) => {
-      try {
-        await uploadOne(files[i], i, t.fileIds[i], uploadedBytes, totals)
-      } catch {
-        failed[i] = true
-      }
-    })
+      await runPool(targets, CONCURRENCY, async (i) => {
+        try {
+          await uploadOne(files[i], i, t.fileIds[i], uploadedBytes, totals)
+        } catch {
+          failed[i] = true
+        }
+      })
 
-    if (canceledRef.current) return
-    if (failed.some(Boolean)) { setError('일부 파일이 여전히 실패했습니다.'); setBusy(false); return }
-    await finalizeTransfer(t.transferId)
-    setResult({ code: t.code, slug: t.slug }) // t = transferRef.current 이므로 code/slug 존재
+      if (canceledRef.current) return
+      if (failed.some(Boolean)) { setError('일부 파일이 여전히 실패했습니다.'); setBusy(false); return }
+      await finalizeTransfer(t.transferId)
+      setResult({ code: t.code, slug: t.slug }) // t = transferRef.current 이므로 code/slug 존재
+    } catch (e: any) {
+      if (!canceledRef.current) setError(e?.message ?? '업로드 실패')
+      setBusy(false)
+    }
   }
 
   function cancelAll() {
