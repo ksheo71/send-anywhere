@@ -8,7 +8,7 @@ export function App() {
   const [tab, setTab] = useState<'send' | 'receive'>(path ? 'receive' : 'send')
 
   return (
-    <main style={{ maxWidth: 560, margin: '40px auto', fontFamily: 'system-ui', padding: 16 }}>
+    <main className="min-h-screen bg-background text-foreground" style={{ maxWidth: 560, margin: '40px auto', fontFamily: 'system-ui', padding: 16 }}>
       <h1>Send Anywhere</h1>
       <nav style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
         <button onClick={() => setTab('send')} disabled={tab === 'send'}>보내기</button>
