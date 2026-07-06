@@ -5,6 +5,7 @@ import type { Store } from './store.js'
 import { registerHealth } from './routes/health.js'
 import { registerTransfers } from './routes/transfers.js'
 import { registerResolve } from './routes/resolve.js'
+import { registerDownload } from './routes/download.js'
 import { createTusServer, registerTus } from './tus.js'
 
 export interface AppDeps { store: Store }
@@ -19,6 +20,7 @@ export function buildApp(config: Config, deps: AppDeps): FastifyInstance {
     })
     registerResolve(scoped, deps.store)
   })
+  registerDownload(app, deps.store)
   const tus = createTusServer(deps.store, config)
   registerTus(app, tus)
   return app
