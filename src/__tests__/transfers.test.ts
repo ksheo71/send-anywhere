@@ -44,6 +44,26 @@ describe('POST /api/transfers', () => {
     })
     expect(res.statusCode).toBe(413)
   })
+
+  it('경로가 포함된 파일명은 마지막 세그먼트만 저장된다(zip-slip 방지)', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/api/transfers',
+      payload: { files: [{ filename: '../../etc/passwd', size: 10 }] },
+    })
+    expect(res.statusCode).toBe(201)
+    const body = res.json()
+    const saved = store.getById(body.transferId)!.files[0]
+    expect(saved.filename).toBe('passwd')
+    expect(saved.filename).not.toMatch(/[\\/]/)
+  })
+
+  it('경로 구분자만 있는 파일명(../ 등)은 400을 반환한다', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/api/transfers',
+      payload: { files: [{ filename: '../', size: 10 }] },
+    })
+    expect(res.statusCode).toBe(400)
+  })
 })
 
 describe('POST /api/transfers/:id/finalize', () => {

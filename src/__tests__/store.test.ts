@@ -53,4 +53,18 @@ describe('store', () => {
     store.deleteTransfer(t.id)
     expect(store.getById(t.id)).toBeNull()
   })
+
+  it('findPendingFile은 대기 중인 파일을 반환하고, 알 수 없는 id나 완료된 파일에는 null을 반환한다', () => {
+    const t = store.createTransfer([{ filename: 'a.txt', size: 10 }])
+    const fid = store.getById(t.id)!.files[0].id
+
+    const pending = store.findPendingFile(fid)
+    expect(pending).not.toBeNull()
+    expect(pending!.id).toBe(fid)
+
+    expect(store.findPendingFile('00000000-0000-4000-8000-000000000000')).toBeNull()
+
+    store.markFileComplete(fid)
+    expect(store.findPendingFile(fid)).toBeNull()
+  })
 })

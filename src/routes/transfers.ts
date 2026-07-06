@@ -9,14 +9,19 @@ export function registerTransfers(app: FastifyInstance, store: Store, config: Co
     const files = req.body?.files ?? []
     if (files.length === 0) return reply.code(400).send({ error: '파일이 없습니다' })
     let total = 0
+    const sanitized: { filename: string; size: number }[] = []
     for (const f of files) {
       if (typeof f.size !== 'number' || f.size < 0) return reply.code(400).send({ error: '잘못된 크기' })
       if (f.size > config.maxFileSize) return reply.code(413).send({ error: '파일이 너무 큽니다' })
+      // 경로 구분자(/, \)를 제거해 zip-slip이나 Content-Disposition 경로 조작을 방지한다.
+      const filename = f.filename.replace(/^.*[\\/]/, '')
+      if (!filename) return reply.code(400).send({ error: '잘못된 파일명' })
+      sanitized.push({ filename, size: f.size })
       total += f.size
     }
     if (total > config.maxTotalSize) return reply.code(413).send({ error: '총 용량 초과' })
 
-    const t = store.createTransfer(files)
+    const t = store.createTransfer(sanitized)
     const view = store.getById(t.id)!
     return reply.code(201).send({
       transferId: t.id, code: t.code, slug: t.slug,

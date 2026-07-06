@@ -23,6 +23,7 @@ export interface Store {
   incrementDownload(id: string): void
   listExpired(now: number): TransferRecord[]
   deleteTransfer(id: string): void
+  findPendingFile(fileId: string): FileRecord | null
 }
 
 function rowToTransfer(r: any): TransferRecord {
@@ -89,6 +90,10 @@ export function createStore(db: Db, config: Config): Store {
         db.prepare('DELETE FROM transfers WHERE id=?').run(id)
       })
       tx()
+    },
+    findPendingFile(fileId) {
+      const r: any = db.prepare('SELECT * FROM files WHERE id=? AND upload_complete=0').get(fileId)
+      return r ? rowToFile(r) : null
     },
   }
 }
