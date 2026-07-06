@@ -1,5 +1,9 @@
 import Fastify, { type FastifyInstance } from 'fastify'
 import rateLimit from '@fastify/rate-limit'
+import fastifyStatic from '@fastify/static'
+import { existsSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { Config } from './config.js'
 import type { Store } from './store.js'
 import { registerHealth } from './routes/health.js'
@@ -23,5 +27,17 @@ export function buildApp(config: Config, deps: AppDeps): FastifyInstance {
   registerDownload(app, deps.store)
   const tus = createTusServer(deps.store, config)
   registerTus(app, tus)
+
+  const webDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'web', 'dist')
+  if (existsSync(webDir)) {
+    app.register(fastifyStatic, { root: webDir })
+    app.setNotFoundHandler((req, reply) => {
+      if (req.url.startsWith('/api') || req.url.startsWith('/files')) {
+        return reply.code(404).send({ error: 'not found' })
+      }
+      return reply.sendFile('index.html')
+    })
+  }
+
   return app
 }
