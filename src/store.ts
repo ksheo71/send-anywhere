@@ -54,7 +54,7 @@ export function createStore(db: Db, config: Config): Store {
         insertT.run(id, code, slug, now, expiresAt, 'uploading')
         for (const f of files) {
           const fid = randomUUID()
-          const storedPath = join(config.storagePath, id, fid)
+          const storedPath = join(config.storagePath, fid) // tus uploadId == fileId, flat 저장
           insertF.run(fid, id, f.filename, f.size, storedPath)
         }
       })

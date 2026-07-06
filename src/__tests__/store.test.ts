@@ -20,7 +20,7 @@ describe('store', () => {
     expect(t.status).toBe('uploading')
     const view = store.getById(t.id)!
     expect(view.files).toHaveLength(1)
-    expect(view.files[0].storedPath).toContain(t.id)
+    expect(view.files[0].storedPath).toContain(view.files[0].id)
     expect(view.files[0].uploadComplete).toBe(false)
   })
 

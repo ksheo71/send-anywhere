@@ -4,10 +4,16 @@ import { loadConfig } from '../config.js'
 import { openDb } from '../db.js'
 import { createStore, type Store } from '../store.js'
 import type { FastifyInstance } from 'fastify'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 let app: FastifyInstance
 let store: Store
-const config = loadConfig({ MAX_FILE_SIZE: '1000', MAX_TOTAL_SIZE: '1500' })
+const config = loadConfig({
+  MAX_FILE_SIZE: '1000', MAX_TOTAL_SIZE: '1500',
+  STORAGE_PATH: mkdtempSync(join(tmpdir(), 'sa-')),
+})
 
 beforeEach(() => {
   store = createStore(openDb(':memory:'), config)
