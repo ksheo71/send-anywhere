@@ -23,6 +23,11 @@ export function createTusServer(store: Store, config: Config): Server {
     path: '/files',
     datastore: new FileStore({ directory: config.storagePath }),
     maxSize: config.maxFileSize,
+    // Cloudflare가 TLS를 종단하고 Caddy는 평문 HTTP로 서빙하므로, 절대 Location을
+    // 만들면 http:// 로 나가 브라우저에서 https 페이지 → http 업로드가 mixed-content로
+    // 차단된다. 상대 Location(`/files/<id>`)을 쓰면 브라우저가 현재 https 오리진으로
+    // 해석하므로 프록시 뒤에서도 안전하다.
+    relativeLocation: true,
     // uploadId를 클라이언트 metadata.fileId로 강제 → stored_path와 일치
     // fileId는 반드시 (1) UUID v4 형식이고 (2) DB에 존재하는 미완료 파일 레코드여야 한다.
     // 그렇지 않으면 경로 조작(예: "../../etc/passwd")으로 STORAGE_PATH 밖에
