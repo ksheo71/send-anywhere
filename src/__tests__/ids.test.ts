@@ -18,12 +18,18 @@ describe('generateCode', () => {
   })
 
   it('exists가 true면 다른 코드로 재시도한다', () => {
-    const used = new Set(['000000'])
+    let first: string | null = null
     let calls = 0
     const code = generateCode(6, (c) => {
       calls++
-      return c === '000000' && calls === 1 ? true : used.has(c)
+      if (first === null) {
+        first = c
+        return true // 첫 후보를 충돌로 처리해 재시도 강제
+      }
+      return false
     })
+    expect(calls).toBeGreaterThanOrEqual(2)
+    expect(code).not.toBe(first)
     expect(code).toMatch(/^\d{6}$/)
   })
 
