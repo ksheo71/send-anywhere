@@ -57,13 +57,16 @@ npm test
 `edge-caddy` 레포의 Caddyfile에 아래 한 줄을 추가하고 push한다.
 
 ```
-http://send.myazit.kr {
+http://sendfile.myazit.kr {
     import common
     reverse_proxy send-anywhere:4500
 }
 ```
 
 `*.myazit.kr` 와일드카드가 서브도메인을 이미 흡수하므로 Cloudflare 대시보드 작업은 별도로 필요 없다.
+
+> 참고: `send.myazit.kr`은 Amazon SES 메일 발송(MAIL FROM)용 MX/SPF 레코드가 이미 있어
+> 와일드카드를 가리므로 웹앱에 사용할 수 없다. 그래서 `sendfile.myazit.kr`을 쓴다.
 
 ### 수동 배포/헬스체크
 
