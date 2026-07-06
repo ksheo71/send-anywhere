@@ -15,7 +15,8 @@ ENV NODE_ENV=production
 COPY package*.json ./
 # better-sqlite3는 네이티브 모듈이라 여기서 npm ci --omit=dev 시 재빌드된다.
 # slim 이미지에는 빌드 툴이 없으므로 먼저 설치한다.
-RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+# wget은 deploy.sh의 /api/health 헬스체크(docker exec ... wget)에 필요(기존 앱 관례).
+RUN apt-get update && apt-get install -y python3 make g++ wget && rm -rf /var/lib/apt/lists/*
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/web/dist ./web/dist
