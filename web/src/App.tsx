@@ -1,20 +1,52 @@
 import { useState } from 'react'
 import { SendPage } from './SendPage.js'
 import { ReceivePage } from './ReceivePage.js'
+import { useTheme } from '@/theme'
+import { ThemeToggle } from '@/components/ThemeToggle'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Card, CardContent } from '@/components/ui/card'
 
 export function App() {
-  // slug/code가 URL 경로에 있으면 받기 화면으로.
   const path = window.location.pathname.replace(/^\//, '')
+  const { theme, toggle } = useTheme()
   const [tab, setTab] = useState<'send' | 'receive'>(path ? 'receive' : 'send')
 
   return (
-    <main className="min-h-screen bg-background text-foreground" style={{ maxWidth: 560, margin: '40px auto', fontFamily: 'system-ui', padding: 16 }}>
-      <h1>Send Anywhere</h1>
-      <nav style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-        <button onClick={() => setTab('send')} disabled={tab === 'send'}>보내기</button>
-        <button onClick={() => setTab('receive')} disabled={tab === 'receive'}>받기</button>
-      </nav>
-      {tab === 'send' ? <SendPage /> : <ReceivePage initialKey={path} />}
-    </main>
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="mx-auto flex max-w-2xl items-center justify-between px-4 py-4">
+        <span className="text-lg font-bold tracking-tight">Send Anywhere</span>
+        <ThemeToggle theme={theme} onToggle={toggle} />
+      </header>
+
+      <main className="mx-auto max-w-2xl px-4 pb-16">
+        <section className="py-8 text-center sm:py-12">
+          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">파일을 어디로든 보내세요</h1>
+          <p className="mt-3 text-muted-foreground">
+            로그인 없이 · 6자리 코드나 링크로 · 24시간 뒤 자동 삭제
+          </p>
+        </section>
+
+        <Card>
+          <CardContent className="pt-6">
+            <Tabs value={tab} onValueChange={(v) => setTab(v as 'send' | 'receive')}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="send">보내기</TabsTrigger>
+                <TabsTrigger value="receive">받기</TabsTrigger>
+              </TabsList>
+              <TabsContent value="send">
+                <SendPage />
+              </TabsContent>
+              <TabsContent value="receive">
+                <ReceivePage initialKey={path} />
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+
+        <footer className="mt-8 text-center text-xs text-muted-foreground">
+          익명 · 파일은 24시간 후 자동 삭제됩니다.
+        </footer>
+      </main>
+    </div>
   )
 }
