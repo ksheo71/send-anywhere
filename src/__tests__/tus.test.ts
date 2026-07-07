@@ -3,6 +3,7 @@ import { buildApp } from '../app.js'
 import { loadConfig } from '../config.js'
 import { openDb } from '../db.js'
 import { createStore, type Store } from '../store.js'
+import { createSignaling } from '../signaling.js'
 import type { FastifyInstance } from 'fastify'
 import { mkdtempSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -16,7 +17,7 @@ const config = loadConfig({ STORAGE_PATH: tmp })
 
 beforeEach(async () => {
   store = createStore(openDb(':memory:'), config)
-  app = buildApp(config, { store })
+  app = buildApp(config, { store, signaling: createSignaling(() => '000000') })
   await app.listen({ port: 0, host: '127.0.0.1' })
   const addr = app.server.address()
   base = typeof addr === 'object' && addr ? `http://127.0.0.1:${addr.port}` : ''

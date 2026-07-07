@@ -11,8 +11,10 @@ import { registerTransfers } from './routes/transfers.js'
 import { registerResolve } from './routes/resolve.js'
 import { registerDownload } from './routes/download.js'
 import { createTusServer, registerTus } from './tus.js'
+import { registerWs } from './routes/ws.js'
+import type { Signaling } from './signaling.js'
 
-export interface AppDeps { store: Store }
+export interface AppDeps { store: Store; signaling: Signaling }
 
 export function buildApp(config: Config, deps: AppDeps): FastifyInstance {
   const app = Fastify({ logger: false, bodyLimit: 1_048_576 })
@@ -27,6 +29,7 @@ export function buildApp(config: Config, deps: AppDeps): FastifyInstance {
   registerDownload(app, deps.store)
   const tus = createTusServer(deps.store, config)
   registerTus(app, tus)
+  registerWs(app, deps.signaling)
 
   const webDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'web', 'dist')
   if (existsSync(webDir)) {
