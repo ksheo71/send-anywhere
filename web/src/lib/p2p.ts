@@ -40,9 +40,11 @@ export function startSender(sig: SignalingClient, files: File[], h: SendHandlers
   const ch = pc.createDataChannel('file')
   ch.binaryType = 'arraybuffer'
   let done = false
+  const pending: RTCIceCandidateInit[] = []
   const timer = setTimeout(() => { if (!done && ch.readyState !== 'open') h.onError?.('연결 시간 초과') }, OPEN_TIMEOUT)
 
   pc.onicecandidate = (e) => { if (e.candidate) sig.signal({ candidate: e.candidate }) }
+  pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed') h.onError?.('연결 실패') }
 
   async function run() {
     try {
@@ -64,7 +66,7 @@ export function startSender(sig: SignalingClient, files: File[], h: SendHandlers
       done = true
       h.onDone?.()
     } catch (e: any) {
-      h.onError?.(e?.message ?? '전송 실패')
+      if (!done) h.onError?.(e?.message ?? '전송 실패')
     }
   }
   ch.onopen = () => { clearTimeout(timer); h.onOpen?.(); run() }
@@ -76,8 +78,13 @@ export function startSender(sig: SignalingClient, files: File[], h: SendHandlers
       sig.signal({ sdp: pc.localDescription })
     },
     async onSignal(data: any) {
-      if (data.sdp) await pc.setRemoteDescription(data.sdp)
-      else if (data.candidate) await pc.addIceCandidate(data.candidate).catch(() => {})
+      if (data.sdp) {
+        await pc.setRemoteDescription(data.sdp)
+        for (const c of pending.splice(0)) await pc.addIceCandidate(c).catch(() => {})
+      } else if (data.candidate) {
+        if (pc.remoteDescription) await pc.addIceCandidate(data.candidate).catch(() => {})
+        else pending.push(data.candidate)
+      }
     },
     cancel() { done = true; clearTimeout(timer); try { ch.close() } catch {} pc.close() },
   }
@@ -95,8 +102,10 @@ export type RecvHandlers = {
 export function startReceiver(sig: SignalingClient, h: RecvHandlers): ReceiverConn {
   const pc = new RTCPeerConnection({ iceServers: ICE })
   let cur: { index: number; name: string; chunks: ArrayBuffer[]; received: number } | null = null
+  const pending: RTCIceCandidateInit[] = []
 
   pc.onicecandidate = (e) => { if (e.candidate) sig.signal({ candidate: e.candidate }) }
+  pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed') h.onError?.('연결 실패') }
   pc.ondatachannel = (ev) => {
     const ch = ev.channel
     ch.binaryType = 'arraybuffer'
@@ -119,12 +128,16 @@ export function startReceiver(sig: SignalingClient, h: RecvHandlers): ReceiverCo
     async onSignal(data: any) {
       if (data.sdp) {
         await pc.setRemoteDescription(data.sdp)
+        for (const c of pending.splice(0)) await pc.addIceCandidate(c).catch(() => {})
         if (data.sdp.type === 'offer') {
           const answer = await pc.createAnswer()
           await pc.setLocalDescription(answer)
           sig.signal({ sdp: pc.localDescription })
         }
-      } else if (data.candidate) await pc.addIceCandidate(data.candidate).catch(() => {})
+      } else if (data.candidate) {
+        if (pc.remoteDescription) await pc.addIceCandidate(data.candidate).catch(() => {})
+        else pending.push(data.candidate)
+      }
     },
     cancel() { pc.close() },
   }
