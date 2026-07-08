@@ -9,6 +9,7 @@ import { Dropzone } from '@/components/Dropzone'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
+import { P2PSend } from './P2PSend.js'
 
 const CHUNK = 50 * 1024 * 1024
 const CONCURRENCY = 3
@@ -16,6 +17,7 @@ const CONCURRENCY = 3
 interface FileState { status: UploadStatus; progress: number }
 
 export function SendPage() {
+  const [mode, setMode] = useState<'relay' | 'p2p'>('relay')
   const [files, setFiles] = useState<File[]>([])
   const [states, setStates] = useState<FileState[]>([])
   const [overall, setOverall] = useState(0)
@@ -163,64 +165,74 @@ export function SendPage() {
 
   const hasError = states.some((s) => s.status === 'error')
 
-  if (result) {
-    return (
-      <div className="flex flex-col items-center gap-5 py-4 text-center">
-        <p className="text-sm text-muted-foreground">받는 사람에게 이 코드나 링크를 전달하세요</p>
-        <div className="font-mono text-5xl font-bold tracking-[0.2em]">{result.code}</div>
-        {qrDataUrl && (
-          <img src={qrDataUrl} alt="QR" width={200} height={200} className="rounded-lg border p-2" />
-        )}
-        <div className="flex w-full max-w-md items-center gap-2">
-          <div className="flex-1 truncate rounded-md border bg-muted px-3 py-2 text-left text-sm">{link}</div>
-          <Button variant="outline" size="icon" onClick={copy} aria-label="링크 복사">
-            {copied ? <Check /> : <Copy />}
-          </Button>
+  function renderRelay() {
+    if (result) {
+      return (
+        <div className="flex flex-col items-center gap-5 py-4 text-center">
+          <p className="text-sm text-muted-foreground">받는 사람에게 이 코드나 링크를 전달하세요</p>
+          <div className="font-mono text-5xl font-bold tracking-[0.2em]">{result.code}</div>
+          {qrDataUrl && (
+            <img src={qrDataUrl} alt="QR" width={200} height={200} className="rounded-lg border p-2" />
+          )}
+          <div className="flex w-full max-w-md items-center gap-2">
+            <div className="flex-1 truncate rounded-md border bg-muted px-3 py-2 text-left text-sm">{link}</div>
+            <Button variant="outline" size="icon" onClick={copy} aria-label="링크 복사">
+              {copied ? <Check /> : <Copy />}
+            </Button>
+          </div>
+          <Badge variant="secondary">24시간 후 자동 삭제</Badge>
+          <Button variant="ghost" onClick={reset}>새 전송</Button>
         </div>
-        <Badge variant="secondary">24시간 후 자동 삭제</Badge>
-        <Button variant="ghost" onClick={reset}>새 전송</Button>
+      )
+    }
+
+    return (
+      <div className="flex flex-col gap-4 py-2">
+        <Dropzone onFiles={(fs) => setFiles((prev) => [...prev, ...fs])} disabled={busy} />
+
+        {files.length > 0 && (
+          <ul className="flex flex-col gap-2">
+            {files.map((f, i) => (
+              <FileRow
+                key={`${f.name}-${i}`}
+                name={f.name}
+                size={f.size}
+                status={states[i]?.status ?? 'queued'}
+                progress={states[i]?.progress ?? 0}
+                onRemove={!busy && !result ? () => setFiles((prev) => prev.filter((_, j) => j !== i)) : undefined}
+              />
+            ))}
+          </ul>
+        )}
+
+        {busy && (
+          <div className="flex flex-col gap-1">
+            <Progress value={overall} />
+            <span className="text-right text-xs text-muted-foreground">{overall}%</span>
+          </div>
+        )}
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+
+        {busy ? (
+          <Button size="lg" variant="outline" onClick={cancelAll}>전체 취소</Button>
+        ) : hasError ? (
+          <div className="flex gap-2">
+            <Button size="lg" className="flex-1" onClick={retryFailed}>다시 시도</Button>
+            <Button size="lg" variant="outline" onClick={cancelAll}>취소</Button>
+          </div>
+        ) : (
+          <Button size="lg" onClick={send} disabled={files.length === 0}>보내기</Button>
+        )}
       </div>
     )
   }
 
-  return (
-    <div className="flex flex-col gap-4 py-2">
-      <Dropzone onFiles={(fs) => setFiles((prev) => [...prev, ...fs])} disabled={busy} />
-
-      {files.length > 0 && (
-        <ul className="flex flex-col gap-2">
-          {files.map((f, i) => (
-            <FileRow
-              key={`${f.name}-${i}`}
-              name={f.name}
-              size={f.size}
-              status={states[i]?.status ?? 'queued'}
-              progress={states[i]?.progress ?? 0}
-              onRemove={!busy && !result ? () => setFiles((prev) => prev.filter((_, j) => j !== i)) : undefined}
-            />
-          ))}
-        </ul>
-      )}
-
-      {busy && (
-        <div className="flex flex-col gap-1">
-          <Progress value={overall} />
-          <span className="text-right text-xs text-muted-foreground">{overall}%</span>
-        </div>
-      )}
-
-      {error && <p className="text-sm text-destructive">{error}</p>}
-
-      {busy ? (
-        <Button size="lg" variant="outline" onClick={cancelAll}>전체 취소</Button>
-      ) : hasError ? (
-        <div className="flex gap-2">
-          <Button size="lg" className="flex-1" onClick={retryFailed}>다시 시도</Button>
-          <Button size="lg" variant="outline" onClick={cancelAll}>취소</Button>
-        </div>
-      ) : (
-        <Button size="lg" onClick={send} disabled={files.length === 0}>보내기</Button>
-      )}
+  const toggle = (
+    <div className="mb-4 flex justify-center gap-1 rounded-lg bg-muted p-1 text-sm">
+      <button onClick={() => setMode('relay')} className={mode === 'relay' ? 'flex-1 rounded-md bg-background py-1 shadow-sm' : 'flex-1 py-1 text-muted-foreground'}>🔗 링크</button>
+      <button onClick={() => setMode('p2p')} className={mode === 'p2p' ? 'flex-1 rounded-md bg-background py-1 shadow-sm' : 'flex-1 py-1 text-muted-foreground'}>⚡ 실시간</button>
     </div>
   )
+  return <div>{toggle}{mode === 'p2p' ? <P2PSend /> : renderRelay()}</div>
 }

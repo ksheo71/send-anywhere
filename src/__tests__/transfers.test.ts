@@ -3,6 +3,7 @@ import { buildApp } from '../app.js'
 import { loadConfig } from '../config.js'
 import { openDb } from '../db.js'
 import { createStore, type Store } from '../store.js'
+import { createSignaling } from '../signaling.js'
 import type { FastifyInstance } from 'fastify'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -17,7 +18,7 @@ const config = loadConfig({
 
 beforeEach(() => {
   store = createStore(openDb(':memory:'), config)
-  app = buildApp(config, { store })
+  app = buildApp(config, { store, signaling: createSignaling(() => '000000') })
 })
 
 describe('POST /api/transfers', () => {

@@ -3,6 +3,7 @@ import { buildApp } from '../app.js'
 import { loadConfig } from '../config.js'
 import { openDb } from '../db.js'
 import { createStore, type Store } from '../store.js'
+import { createSignaling } from '../signaling.js'
 import type { FastifyInstance } from 'fastify'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -26,7 +27,7 @@ function seedReady(files: { filename: string; body: string }[]) {
 
 beforeEach(async () => {
   store = createStore(openDb(':memory:'), config)
-  app = buildApp(config, { store })
+  app = buildApp(config, { store, signaling: createSignaling(() => '000000') })
   await app.ready()
 })
 
@@ -65,7 +66,7 @@ describe('GET /api/transfers/:id/download', () => {
   it('만료된 전송은 404', async () => {
     const expiredConfig = loadConfig({ STORAGE_PATH: tmp, RETENTION_HOURS: '-1' })
     const expiredStore = createStore(openDb(':memory:'), expiredConfig)
-    const expiredApp = buildApp(expiredConfig, { store: expiredStore })
+    const expiredApp = buildApp(expiredConfig, { store: expiredStore, signaling: createSignaling(() => '000000') })
     await expiredApp.ready()
 
     const t = expiredStore.createTransfer([{ filename: 'a.txt', size: 5 }])
