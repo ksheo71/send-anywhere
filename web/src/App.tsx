@@ -8,8 +8,9 @@ import { Card, CardContent } from '@/components/ui/card'
 
 export function App() {
   const path = window.location.pathname.replace(/^\//, '')
+  const p2pCode = (location.hash.match(/^#p2p=(\d+)$/) || [])[1] || ''
   const { theme, toggle } = useTheme()
-  const [tab, setTab] = useState<'send' | 'receive'>(path ? 'receive' : 'send')
+  const [tab, setTab] = useState<'send' | 'receive'>(path || p2pCode ? 'receive' : 'send')
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -37,7 +38,7 @@ export function App() {
                 <SendPage />
               </TabsContent>
               <TabsContent value="receive">
-                <ReceivePage initialKey={path} />
+                <ReceivePage initialKey={path} p2pCode={p2pCode} />
               </TabsContent>
             </Tabs>
           </CardContent>

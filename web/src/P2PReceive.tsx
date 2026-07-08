@@ -19,23 +19,27 @@ export function P2PReceive({ initialCode }: { initialCode?: string }) {
   const [err, setErr] = useState('')
   const sigRef = useRef<SignalingClient | null>(null)
   const connRef = useRef<ReturnType<typeof startReceiver> | null>(null)
+  const manifestRef = useRef<FileMeta[]>([])
+  const phaseRef = useRef<Phase>('input')
+
+  function goPhase(p: Phase) { phaseRef.current = p; setPhase(p) }
 
   function join(c: string) {
     if (!c) return
-    setErr(''); setPhase('connecting')
+    setErr(''); goPhase('connecting')
     let conn: ReturnType<typeof startReceiver>
     const sig = connectSignaling({
       onPeerJoined: () => {},
-      onPeerLeft: () => { if (phase !== 'done') { setErr('상대가 연결을 끊었습니다'); setPhase('error') } },
+      onPeerLeft: () => { if (phaseRef.current !== 'done') { setErr('상대가 연결을 끊었습니다'); goPhase('error') } },
       onSignal: (d) => conn.onSignal(d),
-      onError: (r) => { setErr(r === 'not-found' ? '없는 코드입니다' : '연결 오류'); setPhase('error') },
+      onError: (r) => { setErr(r === 'not-found' ? '없는 코드입니다' : '연결 오류'); goPhase('error') },
     })
     conn = startReceiver(sig, {
-      onManifest: (fs) => { setManifest(fs); setProgress(fs.map(() => 0)); setPhase('receiving') },
-      onFileProgress: (i, recv) => setProgress((p) => p.map((v, j) => (j === i ? Math.round((recv / (manifest[i]?.size || 1)) * 100) : v))),
+      onManifest: (fs) => { manifestRef.current = fs; setManifest(fs); setProgress(fs.map(() => 0)); goPhase('receiving') },
+      onFileProgress: (i, recv) => setProgress((p) => p.map((v, j) => (j === i ? Math.round((recv / (manifestRef.current[i]?.size || 1)) * 100) : v))),
       onFileComplete: (i, name, blob) => setGot((g) => [...g, { name, size: blob.size, url: URL.createObjectURL(blob) }]),
-      onDone: () => setPhase('done'),
-      onError: (e) => { setErr(e); setPhase('error') },
+      onDone: () => goPhase('done'),
+      onError: (e) => { setErr(e); goPhase('error') },
     })
     connRef.current = conn; sigRef.current = sig
     sig.join(c)

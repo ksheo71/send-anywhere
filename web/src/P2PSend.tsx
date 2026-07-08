@@ -18,6 +18,9 @@ export function P2PSend() {
   const [err, setErr] = useState('')
   const sigRef = useRef<SignalingClient | null>(null)
   const connRef = useRef<ReturnType<typeof startSender> | null>(null)
+  const phaseRef = useRef<Phase>('select')
+
+  function goPhase(p: Phase) { phaseRef.current = p; setPhase(p) }
 
   function start() {
     if (!files.length) return
@@ -25,17 +28,17 @@ export function P2PSend() {
     // 순서 주의: sig를 먼저 만들고(그 콜백은 호출 시점에 conn이 채워져 있음), conn을 만든 뒤 create.
     let conn: ReturnType<typeof startSender>
     const sig = connectSignaling({
-      onCreated: (c) => { setCode(c); setPhase('waiting') },
+      onCreated: (c) => { setCode(c); goPhase('waiting') },
       onPeerJoined: () => conn.begin(),
-      onPeerLeft: () => { if (phase !== 'done') { setErr('상대가 연결을 끊었습니다'); setPhase('error') } },
+      onPeerLeft: () => { if (phaseRef.current !== 'done') { setErr('상대가 연결을 끊었습니다'); goPhase('error') } },
       onSignal: (d) => conn.onSignal(d),
-      onError: (r) => { setErr(r === 'busy' ? '이미 사용 중인 코드' : '연결 오류'); setPhase('error') },
+      onError: (r) => { setErr(r === 'busy' ? '이미 사용 중인 코드' : '연결 오류'); goPhase('error') },
     })
     conn = startSender(sig, files, {
-      onOpen: () => setPhase('sending'),
+      onOpen: () => goPhase('sending'),
       onProgress: (i, sent) => setProgress((p) => p.map((v, j) => (j === i ? Math.round((sent / files[i].size) * 100) : v))),
-      onDone: () => setPhase('done'),
-      onError: (e) => { setErr(e); setPhase('error') },
+      onDone: () => goPhase('done'),
+      onError: (e) => { setErr(e); goPhase('error') },
     })
     connRef.current = conn; sigRef.current = sig
     sig.create()
@@ -79,7 +82,7 @@ export function P2PSend() {
       )}
       {phase === 'done' && <Badge variant="secondary">전송 완료 ✅</Badge>}
       {phase === 'error' && <p className="text-sm text-destructive">{err} — 링크(릴레이) 모드로 보내보세요.</p>}
-      <Button variant="ghost" onClick={() => { connRef.current?.cancel(); sigRef.current?.close(); setPhase('select'); setCode(''); setFiles([]) }}>새 전송</Button>
+      <Button variant="ghost" onClick={() => { connRef.current?.cancel(); sigRef.current?.close(); goPhase('select'); setCode(''); setFiles([]) }}>새 전송</Button>
     </div>
   )
 }

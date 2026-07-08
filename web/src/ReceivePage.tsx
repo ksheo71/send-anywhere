@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button'
 import { fmtSize } from '@/lib/format'
 import { P2PReceive } from './P2PReceive.js'
 
-export function ReceivePage({ initialKey }: { initialKey: string }) {
-  const [mode, setMode] = useState<'relay' | 'p2p'>('relay')
+export function ReceivePage({ initialKey, p2pCode }: { initialKey: string; p2pCode?: string }) {
+  const [mode, setMode] = useState<'relay' | 'p2p'>(p2pCode ? 'p2p' : 'relay')
   const [key, setKey] = useState(initialKey)
   const [data, setData] = useState<{ transferId: string; files: FileMeta[] } | null>(null)
   const [error, setError] = useState('')
@@ -78,5 +78,5 @@ export function ReceivePage({ initialKey }: { initialKey: string }) {
       <button onClick={() => setMode('p2p')} className={mode === 'p2p' ? 'flex-1 rounded-md bg-background py-1 shadow-sm' : 'flex-1 py-1 text-muted-foreground'}>⚡ 실시간</button>
     </div>
   )
-  return <div>{toggle}{mode === 'p2p' ? <P2PReceive /> : renderRelay()}</div>
+  return <div>{toggle}{mode === 'p2p' ? <P2PReceive initialCode={p2pCode} /> : renderRelay()}</div>
 }
