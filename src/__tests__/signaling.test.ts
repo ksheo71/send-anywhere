@@ -65,6 +65,18 @@ describe('signaling', () => {
     expect(s.roomCount()).toBe(0)
   })
 
+  it('방 상한(maxRooms) 도달 시 create가 error busy를 반환하고 roomCount가 늘지 않는다', () => {
+    let n = 0
+    const s = createSignaling(() => String(n++).padStart(6, '0'), () => 0, 2)
+    const a = fakePeer(); const b = fakePeer(); const c = fakePeer()
+    s.onMessage(a.peer, { type: 'create' })
+    s.onMessage(b.peer, { type: 'create' })
+    expect(s.roomCount()).toBe(2)
+    s.onMessage(c.peer, { type: 'create' })
+    expect(c.sent).toContainEqual({ type: 'error', reason: 'busy' })
+    expect(s.roomCount()).toBe(2)
+  })
+
   it('sweep가 TTL 지난 미조인 방을 청소한다', () => {
     let t = 0
     const s = createSignaling(() => '123456', () => t)

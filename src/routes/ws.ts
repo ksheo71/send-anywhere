@@ -4,7 +4,7 @@ import type { Signaling, Peer } from '../signaling.js'
 
 export function registerWs(app: FastifyInstance, signaling: Signaling): void {
   app.register(async (scoped) => {
-    await scoped.register(websocket)
+    await scoped.register(websocket, { options: { maxPayload: 65536 } })
     scoped.get('/ws', { websocket: true }, (socket) => {
       const peer: Peer = { send: (m) => { try { socket.send(JSON.stringify(m)) } catch { /* closed */ } } }
       socket.on('message', (raw: Buffer) => {

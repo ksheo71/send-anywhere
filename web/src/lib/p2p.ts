@@ -79,8 +79,10 @@ export function startSender(sig: SignalingClient, files: File[], h: SendHandlers
     },
     async onSignal(data: any) {
       if (data.sdp) {
-        await pc.setRemoteDescription(data.sdp)
-        for (const c of pending.splice(0)) await pc.addIceCandidate(c).catch(() => {})
+        try {
+          await pc.setRemoteDescription(data.sdp)
+          for (const c of pending.splice(0)) await pc.addIceCandidate(c).catch(() => {})
+        } catch { h.onError?.('연결 오류') }
       } else if (data.candidate) {
         if (pc.remoteDescription) await pc.addIceCandidate(data.candidate).catch(() => {})
         else pending.push(data.candidate)
@@ -103,12 +105,15 @@ export function startReceiver(sig: SignalingClient, h: RecvHandlers): ReceiverCo
   const pc = new RTCPeerConnection({ iceServers: ICE })
   let cur: { index: number; name: string; chunks: ArrayBuffer[]; received: number } | null = null
   const pending: RTCIceCandidateInit[] = []
+  let opened = false
+  const timer = setTimeout(() => { if (!opened) h.onError?.('연결 시간 초과') }, OPEN_TIMEOUT)
 
   pc.onicecandidate = (e) => { if (e.candidate) sig.signal({ candidate: e.candidate }) }
   pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed') h.onError?.('연결 실패') }
   pc.ondatachannel = (ev) => {
     const ch = ev.channel
     ch.binaryType = 'arraybuffer'
+    ch.onopen = () => { opened = true; clearTimeout(timer) }
     ch.onmessage = (m) => {
       if (typeof m.data === 'string') {
         const ctrl = parseControl(m.data)
@@ -127,18 +132,20 @@ export function startReceiver(sig: SignalingClient, h: RecvHandlers): ReceiverCo
   return {
     async onSignal(data: any) {
       if (data.sdp) {
-        await pc.setRemoteDescription(data.sdp)
-        for (const c of pending.splice(0)) await pc.addIceCandidate(c).catch(() => {})
-        if (data.sdp.type === 'offer') {
-          const answer = await pc.createAnswer()
-          await pc.setLocalDescription(answer)
-          sig.signal({ sdp: pc.localDescription })
-        }
+        try {
+          await pc.setRemoteDescription(data.sdp)
+          for (const c of pending.splice(0)) await pc.addIceCandidate(c).catch(() => {})
+          if (data.sdp.type === 'offer') {
+            const answer = await pc.createAnswer()
+            await pc.setLocalDescription(answer)
+            sig.signal({ sdp: pc.localDescription })
+          }
+        } catch { h.onError?.('연결 오류') }
       } else if (data.candidate) {
         if (pc.remoteDescription) await pc.addIceCandidate(data.candidate).catch(() => {})
         else pending.push(data.candidate)
       }
     },
-    cancel() { pc.close() },
+    cancel() { clearTimeout(timer); pc.close() },
   }
 }

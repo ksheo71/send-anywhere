@@ -8,7 +8,7 @@ import { connectSignaling, type SignalingClient } from '@/lib/signaling'
 import { startReceiver, type FileMeta } from '@/lib/p2p'
 
 type Phase = 'input' | 'connecting' | 'receiving' | 'done' | 'error'
-type Got = { name: string; size: number; url: string }
+type Got = { index: number; name: string; size: number; url: string }
 
 export function P2PReceive({ initialCode }: { initialCode?: string }) {
   const [code, setCode] = useState(initialCode ?? '')
@@ -21,6 +21,7 @@ export function P2PReceive({ initialCode }: { initialCode?: string }) {
   const connRef = useRef<ReturnType<typeof startReceiver> | null>(null)
   const manifestRef = useRef<FileMeta[]>([])
   const phaseRef = useRef<Phase>('input')
+  const urlsRef = useRef<string[]>([])
 
   function goPhase(p: Phase) { phaseRef.current = p; setPhase(p) }
 
@@ -37,7 +38,11 @@ export function P2PReceive({ initialCode }: { initialCode?: string }) {
     conn = startReceiver(sig, {
       onManifest: (fs) => { manifestRef.current = fs; setManifest(fs); setProgress(fs.map(() => 0)); goPhase('receiving') },
       onFileProgress: (i, recv) => setProgress((p) => p.map((v, j) => (j === i ? Math.round((recv / (manifestRef.current[i]?.size || 1)) * 100) : v))),
-      onFileComplete: (i, name, blob) => setGot((g) => [...g, { name, size: blob.size, url: URL.createObjectURL(blob) }]),
+      onFileComplete: (i, name, blob) => {
+        const url = URL.createObjectURL(blob)
+        urlsRef.current.push(url)
+        setGot((g) => [...g, { index: i, name, size: blob.size, url }])
+      },
       onDone: () => goPhase('done'),
       onError: (e) => { setErr(e); goPhase('error') },
     })
@@ -46,7 +51,10 @@ export function P2PReceive({ initialCode }: { initialCode?: string }) {
   }
 
   useEffect(() => { if (initialCode) join(initialCode) }, [initialCode])
-  useEffect(() => () => { connRef.current?.cancel(); sigRef.current?.close() }, [])
+  useEffect(() => () => {
+    connRef.current?.cancel(); sigRef.current?.close()
+    for (const u of urlsRef.current) URL.revokeObjectURL(u)
+  }, [])
 
   return (
     <div className="flex flex-col gap-4 py-2">
@@ -62,7 +70,7 @@ export function P2PReceive({ initialCode }: { initialCode?: string }) {
       {(phase === 'receiving' || phase === 'done') && (
         <ul className="flex flex-col gap-2">
           {manifest.map((f, i) => {
-            const g = got.find((x) => x.name === f.name)
+            const g = got.find((x) => x.index === i)
             return g
               ? <li key={i} className="flex items-center gap-3 rounded-md border px-3 py-2 text-sm">
                   <span className="flex-1 truncate">{f.name}</span><span className="text-muted-foreground">{fmtSize(f.size)}</span>
@@ -73,7 +81,7 @@ export function P2PReceive({ initialCode }: { initialCode?: string }) {
         </ul>
       )}
       {phase === 'done' && <p className="text-center text-sm text-muted-foreground">전송 완료 — 위에서 내려받으세요.</p>}
-      {phase === 'error' && <p className="text-sm text-destructive">{err}</p>}
+      {phase === 'error' && <p className="text-sm text-destructive">{err} — 링크(릴레이) 모드로 받아보세요.</p>}
     </div>
   )
 }

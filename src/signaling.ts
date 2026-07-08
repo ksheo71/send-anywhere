@@ -9,7 +9,9 @@ export interface Signaling {
   roomCount(): number
 }
 
-export function createSignaling(randomCode: () => string, now: () => number = () => 0): Signaling {
+const MAX_ROOMS = 10000
+
+export function createSignaling(randomCode: () => string, now: () => number = () => 0, maxRooms = MAX_ROOMS): Signaling {
   const rooms = new Map<string, Room>()
   const peerRoom = new Map<Peer, Room>()
 
@@ -35,6 +37,7 @@ export function createSignaling(randomCode: () => string, now: () => number = ()
     onMessage(peer, msg) {
       if (!msg || typeof msg.type !== 'string') return
       if (msg.type === 'create') {
+        if (rooms.size >= maxRooms) { peer.send({ type: 'error', reason: 'busy' }); return }
         const code = uniqueCode()
         const room: Room = { code, sender: peer, receiver: null, createdAt: now() }
         rooms.set(code, room)
