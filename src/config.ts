@@ -22,7 +22,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     retentionHours: num(env.RETENTION_HOURS, 24),
     maxFileSize: num(env.MAX_FILE_SIZE, 2147483648),
     maxTotalSize: num(env.MAX_TOTAL_SIZE, 4294967296),
-    maxFiles: num(env.MAX_FILES, 100),
+    maxFiles: num(env.MAX_FILES, 30),
     chunkSize: num(env.CHUNK_SIZE, 52428800),
     codeLength: num(env.CODE_LENGTH, 6),
     storagePath: env.STORAGE_PATH ?? '/data/uploads',

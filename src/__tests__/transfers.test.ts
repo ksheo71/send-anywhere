@@ -52,14 +52,14 @@ describe('POST /api/transfers', () => {
     expect(view.name).toBe('여행 사진')
   })
 
-  it('파일이 100개를 넘으면 400', async () => {
-    const files = Array.from({ length: 101 }, (_, i) => ({ filename: `f${i}.txt`, size: 1 }))
+  it('파일이 30개를 넘으면 400', async () => {
+    const files = Array.from({ length: 31 }, (_, i) => ({ filename: `f${i}.txt`, size: 1 }))
     const res = await app.inject({ method: 'POST', url: '/api/transfers', payload: { files } })
     expect(res.statusCode).toBe(400)
   })
 
-  it('파일이 정확히 100개면 허용된다', async () => {
-    const files = Array.from({ length: 100 }, (_, i) => ({ filename: `f${i}.txt`, size: 1 }))
+  it('파일이 정확히 30개면 허용된다', async () => {
+    const files = Array.from({ length: 30 }, (_, i) => ({ filename: `f${i}.txt`, size: 1 }))
     const res = await app.inject({ method: 'POST', url: '/api/transfers', payload: { files } })
     expect(res.statusCode).toBe(201)
   })

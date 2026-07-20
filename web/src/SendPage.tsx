@@ -14,7 +14,7 @@ import { P2PSend } from './P2PSend.js'
 
 const CHUNK = 50 * 1024 * 1024
 const CONCURRENCY = 3
-const MAX_FILES = 100
+const MAX_FILES = 30
 const NAME_MAX = 100
 
 interface FileState { status: UploadStatus; progress: number }
@@ -40,7 +40,7 @@ export function SendPage() {
     setStates((prev) => prev.map((s, j) => (j === i ? { ...s, ...patch } : s)))
   }
 
-  // 새 파일을 추가하되 총 100개를 넘기면 넘치는 만큼 잘라내고 안내한다.
+  // 새 파일을 추가하되 총 상한(MAX_FILES)을 넘기면 넘치는 만큼 잘라내고 안내한다.
   function addFiles(incoming: File[]) {
     setFiles((prev) => {
       const room = MAX_FILES - prev.length
