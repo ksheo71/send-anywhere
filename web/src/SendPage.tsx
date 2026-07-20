@@ -7,22 +7,26 @@ import { runPool } from '@/lib/uploadPool'
 import { FileRow, type UploadStatus } from '@/components/FileRow'
 import { Dropzone } from '@/components/Dropzone'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { P2PSend } from './P2PSend.js'
 
 const CHUNK = 50 * 1024 * 1024
 const CONCURRENCY = 3
+const MAX_FILES = 100
+const NAME_MAX = 100
 
 interface FileState { status: UploadStatus; progress: number }
 
 export function SendPage() {
   const [mode, setMode] = useState<'relay' | 'p2p'>('relay')
   const [files, setFiles] = useState<File[]>([])
+  const [name, setName] = useState('')
   const [states, setStates] = useState<FileState[]>([])
   const [overall, setOverall] = useState(0)
   const [busy, setBusy] = useState(false)
-  const [result, setResult] = useState<{ code: string; slug: string } | null>(null)
+  const [result, setResult] = useState<{ code: string; slug: string; name: string | null } | null>(null)
   const [error, setError] = useState('')
   const [qrDataUrl, setQrDataUrl] = useState('')
   const [copied, setCopied] = useState(false)
@@ -30,10 +34,23 @@ export function SendPage() {
   const uploadsRef = useRef<(tus.Upload | undefined)[]>([])
   const canceledRef = useRef(false)
   // createTransfer 응답(transferId/code/slug + 파일별 서버 id)을 재시도 때 재사용하기 위해 보관
-  const transferRef = useRef<{ transferId: string; code: string; slug: string; fileIds: string[] } | null>(null)
+  const transferRef = useRef<{ transferId: string; code: string; slug: string; name: string | null; fileIds: string[] } | null>(null)
 
   function setFileState(i: number, patch: Partial<FileState>) {
     setStates((prev) => prev.map((s, j) => (j === i ? { ...s, ...patch } : s)))
+  }
+
+  // 새 파일을 추가하되 총 100개를 넘기면 넘치는 만큼 잘라내고 안내한다.
+  function addFiles(incoming: File[]) {
+    setFiles((prev) => {
+      const room = MAX_FILES - prev.length
+      if (incoming.length > room) {
+        setError(`파일은 한 번에 최대 ${MAX_FILES}개까지 보낼 수 있습니다`)
+        return [...prev, ...incoming.slice(0, Math.max(0, room))]
+      }
+      setError('')
+      return [...prev, ...incoming]
+    })
   }
 
   // 단일 파일 업로드(성공 시 resolve, 실패 시 reject). tus 참조를 uploadsRef에 저장.
@@ -74,8 +91,8 @@ export function SendPage() {
     setStates(files.map(() => ({ status: 'queued', progress: 0 })))
     uploadsRef.current = new Array(files.length)
     try {
-      const t = await createTransfer(files.map((f) => ({ filename: f.name, size: f.size })))
-      transferRef.current = { transferId: t.transferId, code: t.code, slug: t.slug, fileIds: t.files.map((f) => f.id) }
+      const t = await createTransfer(files.map((f) => ({ filename: f.name, size: f.size })), name.trim() || undefined)
+      transferRef.current = { transferId: t.transferId, code: t.code, slug: t.slug, name: t.name, fileIds: t.files.map((f) => f.id) }
       const totals = files.reduce((s, f) => s + f.size, 0)
       const uploadedBytes = new Array(files.length).fill(0)
       const failed: boolean[] = new Array(files.length).fill(false)
@@ -95,7 +112,7 @@ export function SendPage() {
         return
       }
       await finalizeTransfer(t.transferId)
-      setResult({ code: t.code, slug: t.slug })
+      setResult({ code: t.code, slug: t.slug, name: t.name })
     } catch (e: any) {
       if (!canceledRef.current) setError(e?.message ?? '업로드 실패')
       setBusy(false)
@@ -125,7 +142,7 @@ export function SendPage() {
       if (canceledRef.current) return
       if (failed.some(Boolean)) { setError('일부 파일이 여전히 실패했습니다.'); setBusy(false); return }
       await finalizeTransfer(t.transferId)
-      setResult({ code: t.code, slug: t.slug }) // t = transferRef.current 이므로 code/slug 존재
+      setResult({ code: t.code, slug: t.slug, name: t.name }) // t = transferRef.current 이므로 code/slug 존재
     } catch (e: any) {
       if (!canceledRef.current) setError(e?.message ?? '업로드 실패')
       setBusy(false)
@@ -158,7 +175,7 @@ export function SendPage() {
   }
 
   function reset() {
-    setResult(null); setFiles([]); setStates([]); setOverall(0); setError('')
+    setResult(null); setFiles([]); setName(''); setStates([]); setOverall(0); setError('')
     transferRef.current = null
     uploadsRef.current = []
   }
@@ -169,6 +186,7 @@ export function SendPage() {
     if (result) {
       return (
         <div className="flex flex-col items-center gap-5 py-4 text-center">
+          {result.name && <div className="text-lg font-semibold">{result.name}</div>}
           <p className="text-sm text-muted-foreground">받는 사람에게 이 코드나 링크를 전달하세요</p>
           <div className="font-mono text-5xl font-bold tracking-[0.2em]">{result.code}</div>
           {qrDataUrl && (
@@ -188,7 +206,14 @@ export function SendPage() {
 
     return (
       <div className="flex flex-col gap-4 py-2">
-        <Dropzone onFiles={(fs) => setFiles((prev) => [...prev, ...fs])} disabled={busy} />
+        <Input
+          placeholder="공유 이름 (선택)"
+          value={name}
+          onChange={(e) => setName(e.target.value.slice(0, NAME_MAX))}
+          disabled={busy || !!result}
+          maxLength={NAME_MAX}
+        />
+        <Dropzone onFiles={addFiles} disabled={busy || files.length >= MAX_FILES} />
 
         {files.length > 0 && (
           <ul className="flex flex-col gap-2">

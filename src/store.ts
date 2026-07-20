@@ -5,7 +5,7 @@ import type { Config } from './config.js'
 import { generateCode, generateSlug } from './ids.js'
 
 export interface TransferRecord {
-  id: string; code: string; slug: string
+  id: string; code: string; slug: string; name: string | null
   createdAt: number; expiresAt: number; status: string
 }
 export interface FileRecord {
@@ -15,7 +15,7 @@ export interface FileRecord {
 export interface TransferView extends TransferRecord { files: FileRecord[] }
 
 export interface Store {
-  createTransfer(files: { filename: string; size: number }[]): TransferRecord
+  createTransfer(files: { filename: string; size: number }[], name?: string | null): TransferRecord
   markFileComplete(fileId: string): void
   finalizeTransfer(id: string): void
   resolve(codeOrSlug: string): TransferView | null
@@ -27,7 +27,7 @@ export interface Store {
 }
 
 function rowToTransfer(r: any): TransferRecord {
-  return { id: r.id, code: r.code, slug: r.slug, createdAt: r.created_at, expiresAt: r.expires_at, status: r.status }
+  return { id: r.id, code: r.code, slug: r.slug, name: r.name ?? null, createdAt: r.created_at, expiresAt: r.expires_at, status: r.status }
 }
 function rowToFile(r: any): FileRecord {
   return { id: r.id, filename: r.filename, size: r.size, storedPath: r.stored_path, uploadComplete: !!r.upload_complete }
@@ -40,7 +40,7 @@ export function createStore(db: Db, config: Config): Store {
   const viewFromRow = (r: any): TransferView => ({ ...rowToTransfer(r), files: filesOf(r.id) })
 
   return {
-    createTransfer(files) {
+    createTransfer(files, name = null) {
       const id = randomUUID()
       const code = generateCode(config.codeLength, (c) =>
         !!db.prepare('SELECT 1 FROM transfers WHERE code=?').get(c))
@@ -48,11 +48,11 @@ export function createStore(db: Db, config: Config): Store {
       const now = Date.now()
       const expiresAt = now + config.retentionHours * 3600_000
       const insertT = db.prepare(
-        'INSERT INTO transfers(id,code,slug,created_at,expires_at,status) VALUES(?,?,?,?,?,?)')
+        'INSERT INTO transfers(id,code,slug,name,created_at,expires_at,status) VALUES(?,?,?,?,?,?,?)')
       const insertF = db.prepare(
         'INSERT INTO files(id,transfer_id,filename,size,stored_path,upload_complete) VALUES(?,?,?,?,?,0)')
       const tx = db.transaction(() => {
-        insertT.run(id, code, slug, now, expiresAt, 'uploading')
+        insertT.run(id, code, slug, name, now, expiresAt, 'uploading')
         for (const f of files) {
           const fid = randomUUID()
           const storedPath = join(config.storagePath, fid) // tus uploadId == fileId, flat 저장
@@ -60,7 +60,7 @@ export function createStore(db: Db, config: Config): Store {
         }
       })
       tx()
-      return { id, code, slug, createdAt: now, expiresAt, status: 'uploading' }
+      return { id, code, slug, name, createdAt: now, expiresAt, status: 'uploading' }
     },
     markFileComplete(fileId) {
       db.prepare('UPDATE files SET upload_complete=1 WHERE id=?').run(fileId)

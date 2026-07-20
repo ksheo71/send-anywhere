@@ -1,12 +1,12 @@
 export interface FileMeta { id: string; filename: string; size: number }
 
-export async function createTransfer(files: { filename: string; size: number }[]) {
+export async function createTransfer(files: { filename: string; size: number }[], name?: string) {
   const res = await fetch('/api/transfers', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ files }),
+    body: JSON.stringify({ files, name }),
   })
   if (!res.ok) throw new Error((await res.json()).error ?? '생성 실패')
-  return res.json() as Promise<{ transferId: string; code: string; slug: string; files: FileMeta[] }>
+  return res.json() as Promise<{ transferId: string; code: string; slug: string; name: string | null; files: FileMeta[] }>
 }
 
 export async function finalizeTransfer(id: string) {
@@ -19,7 +19,7 @@ export async function resolve(key: string) {
   const res = await fetch(`/api/resolve/${encodeURIComponent(key)}`)
   if (res.status === 404) return null
   if (!res.ok) throw new Error('조회 실패')
-  return res.json() as Promise<{ transferId: string; expiresAt: number; files: FileMeta[] }>
+  return res.json() as Promise<{ transferId: string; name: string | null; expiresAt: number; files: FileMeta[] }>
 }
 
 export function downloadUrl(id: string, fileId?: string) {

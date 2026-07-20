@@ -38,8 +38,10 @@ export function registerDownload(app: FastifyInstance, store: Store): void {
         return reply.send(stream)
       }
 
+      // 공유건 이름이 있으면 zip 파일명으로 쓰되, 경로/제어문자를 제거해 헤더 조작을 막는다.
+      const zipBase = (view.name ?? '').replace(/[\x00-\x1f\x7f\\/"]/g, '').trim() || `send-anywhere-${view.code}`
       reply.header('Content-Disposition',
-        `attachment; filename="send-anywhere-${view.code}.zip"`)
+        `attachment; filename*=UTF-8''${encodeURIComponent(zipBase)}.zip`)
       reply.type('application/zip')
       const archive = archiver('zip', { zlib: { level: 0 } })
       archive.on('error', (err) => {

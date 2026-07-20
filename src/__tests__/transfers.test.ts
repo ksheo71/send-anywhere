@@ -38,6 +38,32 @@ describe('POST /api/transfers', () => {
     expect(res.statusCode).toBe(400)
   })
 
+  it('이름을 지정하면 저장되고 resolve로 조회된다', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/api/transfers',
+      payload: { files: [{ filename: 'a.txt', size: 10 }], name: '  여행 사진  ' },
+    })
+    expect(res.statusCode).toBe(201)
+    const body = res.json()
+    expect(body.name).toBe('여행 사진') // 앞뒤 공백 제거
+    store.markFileComplete(body.files[0].id)
+    store.finalizeTransfer(body.transferId)
+    const view = store.resolve(body.code)!
+    expect(view.name).toBe('여행 사진')
+  })
+
+  it('파일이 100개를 넘으면 400', async () => {
+    const files = Array.from({ length: 101 }, (_, i) => ({ filename: `f${i}.txt`, size: 1 }))
+    const res = await app.inject({ method: 'POST', url: '/api/transfers', payload: { files } })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it('파일이 정확히 100개면 허용된다', async () => {
+    const files = Array.from({ length: 100 }, (_, i) => ({ filename: `f${i}.txt`, size: 1 }))
+    const res = await app.inject({ method: 'POST', url: '/api/transfers', payload: { files } })
+    expect(res.statusCode).toBe(201)
+  })
+
   it('파일이 상한을 넘으면 413', async () => {
     const res = await app.inject({
       method: 'POST', url: '/api/transfers',

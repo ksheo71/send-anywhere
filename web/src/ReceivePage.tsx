@@ -9,7 +9,7 @@ import { P2PReceive } from './P2PReceive.js'
 export function ReceivePage({ initialKey, p2pCode }: { initialKey: string; p2pCode?: string }) {
   const [mode, setMode] = useState<'relay' | 'p2p'>(p2pCode ? 'p2p' : 'relay')
   const [key, setKey] = useState(initialKey)
-  const [data, setData] = useState<{ transferId: string; files: FileMeta[] } | null>(null)
+  const [data, setData] = useState<{ transferId: string; name: string | null; files: FileMeta[] } | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -49,6 +49,9 @@ export function ReceivePage({ initialKey, p2pCode }: { initialKey: string; p2pCo
 
         {data && (
           <div className="flex flex-col gap-3">
+            {data.name && (
+              <div className="text-center text-lg font-semibold">{data.name}</div>
+            )}
             <ul className="flex flex-col gap-2">
               {data.files.map((f) => (
                 <li key={f.id} className="flex items-center gap-3 rounded-md border px-3 py-2 text-sm">

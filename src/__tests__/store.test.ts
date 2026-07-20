@@ -24,6 +24,16 @@ describe('store', () => {
     expect(view.files[0].uploadComplete).toBe(false)
   })
 
+  it('이름을 지정하면 저장되고, 없으면 null이다', () => {
+    const named = store.createTransfer([{ filename: 'a.txt', size: 10 }], '여행 사진')
+    expect(named.name).toBe('여행 사진')
+    expect(store.getById(named.id)!.name).toBe('여행 사진')
+
+    const anon = store.createTransfer([{ filename: 'b.txt', size: 10 }])
+    expect(anon.name).toBeNull()
+    expect(store.getById(anon.id)!.name).toBeNull()
+  })
+
   it('uploading 상태는 resolve로 안 나오고, finalize 후 나온다', () => {
     const t = store.createTransfer([{ filename: 'a.txt', size: 10 }])
     expect(store.resolve(t.code)).toBeNull()

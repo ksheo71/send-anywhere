@@ -13,6 +13,7 @@ export function openDb(path: string): Db {
       id TEXT PRIMARY KEY,
       code TEXT UNIQUE,
       slug TEXT UNIQUE,
+      name TEXT,
       created_at INTEGER NOT NULL,
       expires_at INTEGER NOT NULL,
       download_count INTEGER NOT NULL DEFAULT 0,
@@ -30,5 +31,10 @@ export function openDb(path: string): Db {
     CREATE INDEX IF NOT EXISTS idx_files_transfer ON files(transfer_id);
     CREATE INDEX IF NOT EXISTS idx_transfers_expires ON transfers(expires_at);
   `)
+  // 기존 배포 DB에는 name 컬럼이 없으므로 없을 때만 추가한다.
+  const hasName = db
+    .prepare("SELECT 1 FROM pragma_table_info('transfers') WHERE name='name'")
+    .get()
+  if (!hasName) db.exec('ALTER TABLE transfers ADD COLUMN name TEXT')
   return db
 }
